@@ -1,27 +1,38 @@
 #              OpenAS2 Server
-#              Version 4.8.3
+#              Version 4.13.0
 #              RELEASE NOTES
 -----
-The OpenAS2 project is pleased to announce the release of OpenAS2 4.8.3
+The OpenAS2 project is pleased to announce the release of OpenAS2 4.13.0
 
-The release download file is: OpenAS2Server-4.8.3.zip
+The release download file is: OpenAS2Server-4.13.0.zip
 
 The zip file contains a PDF document (OpenAS2HowTo.pdf) providing information on installing and using the application.
-## NOTE: Testing covers Java 11 to 21.
-##       Java 8 is NO LONGER SUPPORTED.
+## NOTE: Testing covers Java 17 to 21.
 
-Version 4.8.3 - 2026-06-26
-=======
+Version 4.14.0 2026-10-13
+===========================
 
 This is a minor enhancement and bugfix release.
-1. Optimise resend process.
-2. Fix db_ddl.sql: align with authoritative openas2-schema.xml.
-3. Fix container signal handling so the JVM receives SIGTERM for clean shutdown.
-4. Fix flaky tests icausing CI/CD pipeline to fail.
-5. Fix logging of error response body in AS2SenderModule
-6. Fix start-openas2.bat for logging directory setting.
-7. Add poller configuration to API command for partnership.
-8. Change the IOUtil moveFile method to a more intelligent algorithm for non-homogeneous moves.
+1. Fix enabling the SSL trust keystore stopping every other HTTPS partner being trusted. The keystore replaced the
+   certificates the JVM trusts instead of adding to them, so trusting one partner through it stopped every partner with a
+   publicly issued certificate being trusted unless their root was imported into it as well. When an SSL trust keystore is
+   defined, a server is now trusted if either the keystore or the JVM trust store trusts it, with nothing further to
+   configure. This is also how to connect to a partner whose HTTPS server presents only its own certificate without the
+   intermediate that issued it, which fails with "PKIX path building failed": import the intermediate into the SSL trust
+   keystore, which is reloaded without a restart.
+2. Fix shutting down cutting off files part way through being sent, which is what happens on every restart of a container
+   or service. The shutdown hook only stopped the modules held by the processor, and the directory pollers are not among
+   them, so they were never stopped, and nothing waited for a send in progress: the process exited underneath it. The
+   file was left in the pending folder, never sent and never moved to the error folder if the transmission had not
+   started, and possibly received by the partner if it had. Shutting down, whether from a termination signal or the
+   "shutdown" command, now stops the pollers and the resender picking up new files, waits for the files already being
+   sent, and leaves files not yet started in the outbox to be sent after the restart. The wait is limited overall by the
+   new "shutdown_wait_seconds" property, 25 by default to stay inside the 30 seconds Kubernetes allows before killing the
+   process. When the server starts it also logs a warning for each file an earlier, cut off send left in the pending
+   folder, saying whether it was never transmitted and can be moved back to its outbox, or may have reached the partner
+   and should be checked before being sent again.
+3. Normalise poller directory paths iwhen loading to better ensure there is only one poller per directory.
+
 
 ## Upgrade Notes
  See the openAS2HowTo appendix for the general process on upgrading OpenAS2.
